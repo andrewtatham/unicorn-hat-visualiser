@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unicorn HAT</title>
+<style>
+  :root {
+    --bg: #f4f5f8; --card: #ffffff; --ink: #161a23; --muted: #626a7c; --line: #e1e4ec;
+    --accent: #6c4cff; --on: #20b36b; --off: #c3c8d4; --shot-bg: #0e1016;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0d12; --card: #151924; --ink: #e8ebf3; --muted: #8b93a7; --line: #232837;
+      --accent: #8b74ff; --on: #2ccf83; --off: #3a4154; --shot-bg: #07080c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  h1 { font-size: 22px; margin: 0; }
+  .now { display: flex; gap: 16px; align-items: center; background: var(--card);
+         border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; flex: 1 1 340px; }
+  .now canvas { width: 120px; height: 120px; border-radius: 10px; background: var(--shot-bg); flex: none; }
+  .now small { color: var(--muted); display: block; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+  .now b { font-size: 19px; }
+  .now p { margin: 2px 0 0; color: var(--muted); }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 18px 0 6px; }
+  .bar .count { color: var(--muted); margin-right: auto; }
+  button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+           border-radius: 9px; padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+       margin: 28px 0 10px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+          display: flex; flex-direction: column; }
+  .card.playing { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .shot { background: var(--shot-bg); aspect-ratio: 1; display: block; width: 100%; }
+  .shot img { width: 100%; height: 100%; display: block; object-fit: contain; transition: filter .2s, opacity .2s; }
+  .card.disabled .shot img { filter: grayscale(1); opacity: .35; }
+  .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .title { font-weight: 600; }
+  .desc { color: var(--muted); font-size: 13.5px; flex: 1; }
+  .play { padding: 4px 10px; font-size: 13px; }
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .switch span { position: absolute; inset: 0; background: var(--off); border-radius: 13px; transition: background .15s; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+                        background: #fff; border-radius: 50%; transition: transform .15s; }
+  .switch input:checked + span { background: var(--on); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+  .err { color: #d33; margin: 16px 0; }
+  @media (max-width: 480px) { .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } .now canvas { width: 96px; height: 96px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Unicorn HAT</h1>
+    <div class="now">
+      <canvas id="live" width="160" height="160" aria-label="Live view of the board"></canvas>
+      <div>
+        <small>Now playing</small>
+        <b id="nowTitle">…</b>
+        <p id="nowDesc"></p>
+      </div>
+    </div>
+  </header>
+
+  <div class="bar">
+    <span class="count" id="count"></span>
+    <button id="allOn">Enable all</button>
+    <button id="allOff">Disable all</button>
+  </div>
+  <div id="err" class="err" hidden>Can't reach the Pi. Retrying…</div>
+  <div id="groups"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let state = { visualisers: [], current: null, frame: [] };
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function drawLive() {
+  const c = $("#live"), g = c.getContext("2d"), S = c.width / 8;
+  g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--shot-bg") || "#0e1016";
+  g.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 64; i++) {
+    const x = (i % 8) * S + S / 2, y = Math.floor(i / 8) * S + S / 2;
+    const p = state.frame[i] || [0, 0, 0];
+    g.beginPath(); g.arc(x, y, S * 0.42, 0, 7); g.fillStyle = "rgb(40,44,56)"; g.fill();
+    if (p[0] + p[1] + p[2] > 0) {
+      const col = `rgb(${p[0]},${p[1]},${p[2]})`;
+      g.shadowColor = col; g.shadowBlur = S * 0.5;
+      g.beginPath(); g.arc(x, y, S * 0.36, 0, 7); g.fillStyle = col; g.fill();
+      g.shadowBlur = 0;
+    }
+  }
+}
+
+function render() {
+  const groups = {};
+  state.visualisers.forEach(v => (groups[v.cat] = groups[v.cat] || []).push(v));
+  const root = $("#groups");
+  root.innerHTML = "";
+  for (const [cat, items] of Object.entries(groups)) {
+    const h = document.createElement("h2"); h.textContent = cat; root.appendChild(h);
+    const grid = document.createElement("div"); grid.className = "grid"; root.appendChild(grid);
+    items.forEach(v => {
+      const el = document.createElement("div");
+      el.className = "card" + (v.enabled ? "" : " disabled") + (v.id === state.current ? " playing" : "");
+      el.dataset.id = v.id;
+      el.innerHTML = `
+        <div class="shot"><img loading="lazy" src="/shots/${v.id}.png" alt="${v.title} preview"></div>
+        <div class="body">
+          <div class="row"><span class="title"></span>
+            <label class="switch"><input type="checkbox" ${v.enabled ? "checked" : ""} aria-label="Enable ${v.title}"><span></span></label></div>
+          <div class="desc"></div>
+          <div class="row"><button class="play">Play next</button></div>
+        </div>`;
+      el.querySelector(".title").textContent = v.title;
+      el.querySelector(".desc").textContent = v.desc;
+      el.querySelector("input").addEventListener("change", async (e) => {
+        v.enabled = e.target.checked; el.classList.toggle("disabled", !v.enabled); updateCount();
+        try { await api("/api/enable", { id: v.id, enabled: v.enabled }); } catch { poll(); }
+      });
+      el.querySelector(".play").addEventListener("click", async (e) => {
+        e.target.textContent = "Queued ✓"; setTimeout(() => (e.target.textContent = "Play next"), 1500);
+        await api("/api/next", { id: v.id });
+      });
+      grid.appendChild(el);
+    });
+  }
+  updateNow(); updateCount();
+}
+
+function updateCount() {
+  const n = state.visualisers.filter(v => v.enabled).length;
+  $("#count").textContent = `${n} of ${state.visualisers.length} enabled`;
+}
+
+function updateNow() {
+  const v = state.visualisers.find(v => v.id === state.current);
+  $("#nowTitle").textContent = v ? v.title : "Nothing enabled";
+  $("#nowDesc").textContent = v ? v.desc : "Turn something on below.";
+  document.querySelectorAll(".card").forEach(c => c.classList.toggle("playing", c.dataset.id === state.current));
+}
+
+let firstRender = true;
+async function poll() {
+  try {
+    const s = await api("/api/state");
+    $("#err").hidden = true;
+    const sameList = s.visualisers.length === state.visualisers.length;
+    const changed = !sameList || s.visualisers.some((v, i) => v.enabled !== state.visualisers[i].enabled);
+    state = s;
+    if (firstRender || changed) { render(); firstRender = false; } else updateNow();
+    drawLive();
+  } catch { $("#err").hidden = false; }
+}
+
+$("#allOn").onclick = async () => { await api("/api/bulk", { enabled: true }); poll(); };
+$("#allOff").onclick = async () => { await api("/api/bulk", { enabled: false }); poll(); };
+poll(); setInterval(poll, 500);
+</script>
+</body>
+</html>

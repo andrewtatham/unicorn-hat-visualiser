@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+unicorn-config.json
+unicorn-config.json.tmp
