@@ -318,8 +318,11 @@ def _c4_drop_row(b, c):
     return None
 
 
+_C4_NOISE = {1: 0.0, 2: 0.0}   # per-player evaluation noise, re-rolled every game
+
+
 def _c4_eval(b, me):
-    sc = 0
+    sc = random.uniform(-_C4_NOISE[me], _C4_NOISE[me])
     for cells in _C4_LINES:
         vals = [b[a][r] for a, r in cells]
         m, o = vals.count(me), vals.count(3 - me)
@@ -337,7 +340,9 @@ def _c4_search(b, depth, alpha, beta, player, me):
     w, _ = _c4_winner(b)
     if w:
         return (10000 + depth) if w == me else -(10000 + depth), None
-    moves = [c for c in (3, 4, 2, 5, 1, 6, 0, 7) if _c4_drop_row(b, c) is not None]
+    moves = [c for c in range(C4W) if _c4_drop_row(b, c) is not None]
+    random.shuffle(moves)                        # random tie-breaking between equally good moves
+    moves.sort(key=lambda c: abs(c - 3.5) + random.random() * 2.5)   # but still prefer the middle, loosely
     if not moves:
         return 0, None
     if depth == 0:
@@ -349,7 +354,7 @@ def _c4_search(b, depth, alpha, beta, player, me):
             r = _c4_drop_row(b, c); b[c][r] = player
             v, _ = _c4_search(b, depth - 1, alpha, beta, 3 - player, me)
             b[c][r] = 0
-            if v > best + random.random() * 0.5 or best == -10 ** 9:
+            if v > best:
                 best, best_move = v, c
             alpha = max(alpha, best)
             if alpha >= beta: break
@@ -386,8 +391,17 @@ def connect4(games=2):
         b = [[0] * C4H for _ in range(C4W)]
         player = random.choice((1, 2))
         winner, cells = 0, None
+        # each player gets a random personality this game: noisy or sharp, shallow or deep
+        _C4_NOISE[1], _C4_NOISE[2] = random.uniform(0.3, 4), random.uniform(0.3, 4)
+        depth = {1: random.choice((3, 4)), 2: random.choice((3, 4))}
         for turn in range(C4W * C4H):
-            _, c = _c4_search(b, 4, -10 ** 9, 10 ** 9, player, player)
+            legal = [c for c in range(C4W) if _c4_drop_row(b, c) is not None]
+            if turn < 4 and random.random() < 0.6:           # varied openings
+                c = random.choice([c for c in legal if 2 <= c <= 5] or legal)
+            elif random.random() < 0.06:                    # now and then, a blunder
+                c = random.choice(legal)
+            else:
+                _, c = _c4_search(b, depth[player], -10 ** 9, 10 ** 9, player, player)
             r = _c4_drop_row(b, c)
             # the piece falls in from the top edge of its column
             for y in range(0, r + 1):

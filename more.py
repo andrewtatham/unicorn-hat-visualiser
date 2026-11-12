@@ -27,10 +27,10 @@ def flash(color, n=3):
 # ------------------------------------------------------------------ Breakout
 def breakout(sec=30):
     row_cols = [(255, 0, 0), (255, 140, 0), (255, 255, 0)]
-    new_bricks = lambda: {(x, y) for x in range(W) for y in range(3)}
-    bricks = new_bricks(); lives = 3; pad = 3.5; err = 0
+    new_bricks = lambda: {(x, y) for x in range(W) for y in range(3) if random.random() > 0.12}
+    bricks = new_bricks(); lives = 3; pad = random.uniform(1.5, 5.5); err = 0
     def serve():
-        return 3.5, 5.0, random.choice((-0.3, 0.3)), -0.4
+        return random.uniform(1.5, 5.5), 5.0, random.choice((-1, 1)) * random.uniform(0.15, 0.45), -random.uniform(0.33, 0.48)
     bx, by, vx, vy = serve()
     t0 = time.time()
     while time.time() - t0 < sec:
@@ -66,9 +66,11 @@ def breakout(sec=30):
 
 # ------------------------------------------------------------------ Space invaders
 def invaders(sec=30):
-    def new_aliens(): return {(c * 2, r) for c in range(3) for r in range(3)}
-    aliens = new_aliens(); ox = oy = 0; dirx = 1
-    cx = 3; bullets = []; bombs = []; cd = 0; lives = 3; k = 0; hit_flash = 0
+    def new_aliens():
+        a = {(c * 2, r) for c in range(3) for r in range(3) if random.random() > 0.15}
+        return a or {(2, 1)}
+    aliens = new_aliens(); ox = random.randint(0, 3); oy = 0; dirx = random.choice((-1, 1))
+    cx = random.randint(0, 7); bullets = []; bombs = []; cd = 0; lives = 3; k = 0; hit_flash = 0
     t0 = time.time()
     while time.time() - t0 < sec:
         k += 1
@@ -79,7 +81,7 @@ def invaders(sec=30):
             else: ox = nx
             abs_al = {(ox + a, oy + b) for a, b in aliens}
         if abs_al and max(y for _, y in abs_al) >= 6:
-            flash((255, 0, 0)); aliens = new_aliens(); ox = oy = 0; bombs = []; bullets = []; continue
+            flash((255, 0, 0)); aliens = new_aliens(); ox = random.randint(0, 3); oy = 0; bombs = []; bullets = []; continue
         # cannon AI
         danger = [b for b in bombs if int(b[0]) == cx and 3 <= b[1] < 7]
         if danger:
@@ -108,7 +110,7 @@ def invaders(sec=30):
         if lives <= 0:
             flash((255, 0, 0)); lives = 3
         if not aliens:
-            flash((0, 255, 0)); aliens = new_aliens(); ox = oy = 0; bombs = []
+            flash((0, 255, 0)); aliens = new_aliens(); ox = random.randint(0, 3); oy = 0; bombs = []
         uh.clear()
         for (x, y) in abs_al: px(x, y, (0, 255, 80) if (y - oy) % 2 == 0 else (200, 0, 255))
         for b in bullets: px(b[0], b[1], (255, 255, 255))
@@ -185,7 +187,10 @@ def sand(sec=28):
 # ------------------------------------------------------------------ Langton's ant
 def ant(sec=25):
     cells = [[0] * W for _ in range(W)]
-    x = y = 3; d = 0; t0 = time.time(); steps = 0
+    for _ in range(random.randint(0, 14)):
+        cells[random.randrange(W)][random.randrange(W)] = 1
+    x, y, d = random.randrange(W), random.randrange(W), random.randrange(4)
+    t0 = time.time(); steps = 0
     dirs = ((0, -1), (1, 0), (0, 1), (-1, 0))
     while time.time() - t0 < sec:
         for _ in range(2):
@@ -348,11 +353,19 @@ def pacman(sec=30):
             if c in goals and c != src:
                 while prev[c] != src: c = prev[c]
                 return c
-            for n in nbrs(c):
+            ns = list(nbrs(c)); random.shuffle(ns)          # random tie-breaking: varied routes
+            for n in ns:
                 if n not in prev and n not in blocked: prev[n] = c; q.append(n)
         return None
-    def reset_dots(): return {(x, y) for y in range(H) for x in range(W) if (x, y) not in wall} - {(0, 0)}
-    dots = reset_dots(); pac = (0, 0); ghost = (7, 7); k = 0; t0 = time.time()
+    open_cells = [(x, y) for y in range(H) for x in range(W) if (x, y) not in wall]
+    def spawn():
+        while True:
+            a, g = random.sample(open_cells, 2)
+            if abs(a[0] - g[0]) + abs(a[1] - g[1]) >= 7:
+                return a, g
+    def reset_dots(): return set(open_cells) - {pac}
+    pac, ghost = spawn(); dots = reset_dots(); k = 0; t0 = time.time()
+    chase = random.uniform(0.55, 0.9)                       # how relentless the ghost is this round
     while time.time() - t0 < sec:
         k += 1
         near = {ghost} | set(nbrs(ghost))
@@ -362,7 +375,7 @@ def pacman(sec=30):
             nxt = max(opts, key=lambda n: abs(n[0] - ghost[0]) + abs(n[1] - ghost[1])) if opts else pac
         pac = nxt; dots.discard(pac)
         if k % 2 == 0:
-            if random.random() < 0.75:
+            if random.random() < chase:
                 g = bfs_first(ghost, {pac})
                 ghost = g if g else ghost
             else:
@@ -373,9 +386,9 @@ def pacman(sec=30):
         px(ghost[0], ghost[1], (255, 0, 0)); px(pac[0], pac[1], (255, 220, 0))
         uh.show(); time.sleep(0.2)
         if pac == ghost:
-            flash((255, 0, 0), 2); pac = (0, 0); ghost = (7, 7)
+            flash((255, 0, 0), 2); pac, ghost = spawn()
         if not dots:
-            flash((255, 220, 0), 2); dots = reset_dots(); pac = (0, 0); ghost = (7, 7)
+            flash((255, 220, 0), 2); pac, ghost = spawn(); dots = reset_dots(); chase = random.uniform(0.55, 0.9)
 
 
 # ------------------------------------------------------------------ Pi dashboard
