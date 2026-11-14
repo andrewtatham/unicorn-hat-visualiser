@@ -34,7 +34,8 @@ so only run it on a trusted network.
 
 - The HAT is mounted upside down relative to the library default, so `snake.py` sets `uh.rotation(180)` once.
   Change that line if yours is the other way up.
-- Brightness is 0.5 by day (07:00-21:00 Pi time) and 0.2 at night. See `DAY_BRIGHTNESS` / `NIGHT_BRIGHTNESS`.
+- Brightness is a per-channel output ceiling: 12/255 by day (07:00-21:00 Pi time) and 4/255 at night. See `DAY_OUT` / `NIGHT_OUT`.
+  The library's gamma table turns every dim colour into a pure primary, so `snake.py` disables it and tone-maps in software.
 - Driving the board with raw `rpi_ws281x` only lit half of it on the test Pi; Pimoroni's `unicornhat` library works.
 - Snake mistakes: `choose_human()` in `snake_ai.py` (`p_greedy`, `p_slip`) controls how often it blunders.
 - Regenerate screenshots on a PC with `python gen_shots.py`.

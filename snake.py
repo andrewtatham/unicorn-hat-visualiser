@@ -5,22 +5,49 @@ import unicornhat as uh
 
 W = H = 8
 uh.set_layout(uh.AUTO)
-DAY_BRIGHTNESS, NIGHT_BRIGHTNESS = 0.5, 0.2   # day = 07:00-21:00 local time
+# Brightness is a per-channel output ceiling (0-255 PWM). Day = 07:00-21:00 local time.
+# The library's own gamma table maps every input below ~22 to zero, so at low brightness it
+# collapsed every colour to a pure primary. We switch it off and tone-map in software instead,
+# which keeps colour ratios (an orange stays orange) even when the whole board is dim.
+DAY_OUT, NIGHT_OUT = 12, 4
+TONE_GAMMA = 1.4
+_HW = hasattr(uh, "disable_gamma")                # False when running against a fake display in tests
+_lut = list(range(256))
 _last_check = [0.0, None]
 _real_show = uh.show
+
+
+def _build_lut(out_max):
+    for v in range(256):
+        _lut[v] = int(round(out_max * (v / 255.0) ** TONE_GAMMA))
+
+
+if _HW:
+    uh.disable_gamma()
+    uh.ws2812.setBrightness(255)                   # no hardware scaling; the cap is our output ceiling (tiny, so safe)
+    _real_set_pixel = uh.set_pixel
+
+    def _tone_set_pixel(x, y, r, g=None, b=None):
+        if g is None:
+            r, g, b = r
+        c = lambda v: _lut[max(0, min(255, int(v)))]
+        return _real_set_pixel(x, y, c(r), c(g), c(b))
+
+    uh.set_pixel = _tone_set_pixel
 
 
 def _auto_show():
     now = time.time()
     if now - _last_check[0] > 30:               # re-check the clock twice a minute
         _last_check[0] = now
-        level = DAY_BRIGHTNESS if 7 <= time.localtime().tm_hour < 21 else NIGHT_BRIGHTNESS
+        level = DAY_OUT if 7 <= time.localtime().tm_hour < 21 else NIGHT_OUT
         if level != _last_check[1]:
             _last_check[1] = level
-            uh.brightness(level)
+            _build_lut(level)
     _real_show()
 
 
+_build_lut(DAY_OUT)
 uh.show = _auto_show
 uh.rotation(180)  # board is mounted upside down relative to the library default
 import classics
@@ -286,7 +313,7 @@ def _tetris_game(max_pieces):
 
 
 C4W, C4H = 8, 8   # board fills the whole 8x8 display
-RED, YEL = (255, 0, 0), (255, 200, 0)
+RED, YEL = (255, 0, 0), (255, 255, 0)   # pure yellow: stays distinct from red when dim
 
 
 def _c4_lines():
