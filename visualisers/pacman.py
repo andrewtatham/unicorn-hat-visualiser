@@ -62,7 +62,7 @@ _PAC_RELEASE = {"blinky": 0, "pinky": 12, "inky": 35, "clyde": 60}
 class _PacGame:
     def __init__(self):
         self.wall = {(x, y) for y, r in enumerate(_PAC_MAP) for x, ch in enumerate(r) if ch in "#-"}
-        self.dots0 = {(x, y) for y, r in enumerate(_PAC_MAP) for x, ch in enumerate(r) if ch == "."}
+        self.dots0 = {(x, y) for y, r in enumerate(_PAC_MAP) for x, ch in enumerate(r) if ch == "." and (x + y) % 2 == 0}   # every other cell, so corridors read as dots not lines
         self.pills0 = {(x, y) for y, r in enumerate(_PAC_MAP) for x, ch in enumerate(r) if ch == "o"}
         self.house = set(_PAC_HOUSE)
         self.lives = 3; self.level = 1
@@ -228,7 +228,7 @@ class _PacGame:
         for c in self.wall:
             if cx <= c[0] < cx + W and cy <= c[1] < cy + H:
                 put(c, (0, 0, 110) if _PAC_MAP[c[1]][c[0]] == "#" else (110, 60, 90))
-        for c in self.dots: put(c, (70, 70, 70))
+        for c in self.dots: put(c, (190, 190, 190))
         pill = (255, 200, 200) if self.tick % 4 < 2 else (120, 70, 70)
         for c in self.pills: put(c, pill)
         for g in self.ghosts:
