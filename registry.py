@@ -44,7 +44,7 @@ add('invaders', 'Space Invaders', 'A tiny invasion defended by a dodging cannon.
 add('2048', '2048', 'The AI slides tiles, drawn as 2x2 pixel blocks.', G, g2048.run, 0.7)
 add('pacman', 'Pac-Man', 'Full maze, four ghosts, power pills, and an 8x8 window that scrolls with Pac-Man.', G, pacman.run)
 
-add('maze', 'Maze solver', 'Carves a maze, then a dot solves it.', T, maze.run, 0.97)
+add('maze', 'Maze solver', 'Digs a 31x31 maze with loops, then an explorer wanders it (dead ends glow red) before the shortest route lights up.', T, maze.run, 0.62)
 add('sand', 'Falling sand', 'Grains pile up as gravity rotates around the board.', T, sand.run, 0.8)
 add('ant', "Langton's ant", 'A simple ant building complex patterns.', T, ant.run, 0.8)
 add('sorting', 'Sorting bars', 'Bubble, insertion, quick and selection sort.', T, sorting.run, 0.4)
